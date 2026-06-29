@@ -91,8 +91,17 @@ List gfpopTransfer(NumericVector vectData, DataFrame mygraph, std::string type, 
   Rcpp::NumericVector minn = mygraph["min"];
   Rcpp::NumericVector maxx = mygraph["max"];
 
+  ///rule column; absent or NA = active in all rules
+  bool hasRule = mygraph.containsElementNamed("rule");
+  Rcpp::IntegerVector ruleCol;
+  if(hasRule){ruleCol = mygraph["rule"];}
+
   for(int i = 0 ; i < mygraph.nrow(); i++)
-    {graph << Edge(state1[i], state2[i], typeEdge[i], fabs(parameter[i]), penalty[i], fabs(KK[i]), fabs(aa[i]), minn[i], maxx[i]);}
+    {
+      unsigned int rid = UINT_MAX;
+      if(hasRule && !Rcpp::IntegerVector::is_na(ruleCol[i])){rid = (unsigned int) ruleCol[i];}
+      graph << Edge(state1[i], state2[i], typeEdge[i], fabs(parameter[i]), penalty[i], fabs(KK[i]), fabs(aa[i]), minn[i], maxx[i], rid);
+    }
 
   if(testMode == TRUE){graph.show();} ///TESTMODE
 

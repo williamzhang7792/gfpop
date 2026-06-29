@@ -2,8 +2,8 @@
 //#include<iostream>
 
 Edge::Edge(){}
-Edge::Edge(unsigned int s1, unsigned int s2, Rcpp::String cstt, double param, double b, double K, double a, double mini, double maxi) :
-    state1(s1), state2(s2), constraint(cstt), parameter(fabs(param)), beta(fabs(b)), KK(K), aa(a), minn(mini), maxx(maxi){}
+Edge::Edge(unsigned int s1, unsigned int s2, Rcpp::String cstt, double param, double b, double K, double a, double mini, double maxi, unsigned int ruleID) :
+    state1(s1), state2(s2), constraint(cstt), parameter(fabs(param)), beta(fabs(b)), KK(K), aa(a), minn(mini), maxx(maxi), ruleID(ruleID){}
 
 unsigned int Edge::getState1() const {return(state1);}
 unsigned int Edge::getState2() const {return(state2);}
@@ -14,6 +14,7 @@ double Edge::getKK() const {return(KK);}
 double Edge::getAA() const {return(aa);}
 double Edge::getMinn() const {return(minn);}
 double Edge::getMaxx() const {return(maxx);}
+unsigned int Edge::getRuleID() const {return(ruleID);}
 
 void Edge::show() const
 {

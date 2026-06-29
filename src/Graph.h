@@ -25,6 +25,7 @@ class Graph
     unsigned int nb_rows() const;
 
     Edge getEdge(unsigned int i) const;
+    bool isActive(unsigned int edgeIndex, unsigned int rule) const;
     std::vector<unsigned int> getStartState() const;
     std::vector<unsigned int> getEndState() const;
 

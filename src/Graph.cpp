@@ -56,6 +56,14 @@ Edge Graph::getEdge(unsigned int i) const {return(edges[i]);}
 std::vector<unsigned int> Graph::getStartState() const {return(startState);}
 std::vector<unsigned int> Graph::getEndState() const {return(endState);}
 
+// ### isActive ### /// /// ### isActive ### /// /// ### isActive ### /// /// ### isActive ### ///
+///UINT_MAX ruleID is active in every rule
+bool Graph::isActive(unsigned int edgeIndex, unsigned int rule) const
+{
+  unsigned int rid = edges[edgeIndex].getRuleID();
+  return (rid == UINT_MAX) || (rid == rule);
+}
+
 
 // ### buildInterval ### /// /// ### buildInterval ### /// /// ### buildInterval ### /// /// ### buildInterval ### ///
 // ### buildInterval ### /// /// ### buildInterval ### /// /// ### buildInterval ### /// /// ### buildInterval ### ///

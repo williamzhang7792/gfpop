@@ -73,3 +73,21 @@ test_that("gfpop still solves a standard problem with the rule column present", 
   ## parameters and changepoints are aligned in length
   expect_identical(length(fit$parameters), length(fit$changepoints))
 })
+
+test_that("rule column is read by the solver but is inert (no effect yet)", {
+  set.seed(7)
+  x <- c(rnorm(30, 0), rnorm(30, 8))
+  p <- 2 * log(60)
+  ## same graph, only the rule column differs
+  g_na <- graph(
+    Edge("a", "a", "null"),
+    Edge("a", "a", "std", penalty = p))
+  g_r1 <- graph(
+    Edge("a", "a", "null", rule = 1),
+    Edge("a", "a", "std", penalty = p, rule = 1))
+  fit_na <- gfpop(x, g_na, type = "mean")
+  fit_r1 <- gfpop(x, g_r1, type = "mean")
+  expect_identical(fit_na$changepoints, fit_r1$changepoints)
+  expect_equal(fit_na$parameters, fit_r1$parameters)
+  expect_equal(fit_na$globalCost, fit_r1$globalCost)
+})

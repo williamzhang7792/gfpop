@@ -4,12 +4,13 @@
 #include<string>
 #include "Rcpp.h"
 #include "math.h" //to use INFINITY
+#include <climits> ///for UINT_MAX
 
 class Edge
 {
   public:
     Edge();
-    Edge(unsigned int s1, unsigned int s2, Rcpp::String cstt = "std", double param = 0, double b = 0, double K = INFINITY, double a = 0, double mini = -INFINITY, double maxi = INFINITY);
+    Edge(unsigned int s1, unsigned int s2, Rcpp::String cstt = "std", double param = 0, double b = 0, double K = INFINITY, double a = 0, double mini = -INFINITY, double maxi = INFINITY, unsigned int ruleID = UINT_MAX);
 
     double getBeta() const;
     unsigned int getState1() const;
@@ -20,6 +21,7 @@ class Edge
     double getAA() const;
     double getMinn() const;
     double getMaxx() const;
+    unsigned int getRuleID() const;
 
     void show() const;
 
@@ -33,6 +35,7 @@ class Edge
     double aa;
     double minn;
     double maxx;
+    unsigned int ruleID; ///UINT_MAX = active in all rules
 };
 
 #endif // EDGE_H
