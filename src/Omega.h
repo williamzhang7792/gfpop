@@ -15,7 +15,7 @@
 class Omega
 {
   public:
-    Omega(Graph graph);
+    Omega(Graph graph, std::vector<unsigned int> rule_vec = std::vector<unsigned int>());
     ~Omega();
 
     std::vector< std::vector< int > > GetChangepoints() const;
@@ -38,6 +38,7 @@ class Omega
 
   private:
     Graph m_graph; ///graph of the constraints. 9 variables
+    std::vector<unsigned int> rule_vec; ///per-point rule id; empty = no filtering
     unsigned int p;   ///number of states in the graph = number of columns in the matrix Q_ts
     unsigned int q; ///number of edges in the graph = number of elements in the object Q_edges
 

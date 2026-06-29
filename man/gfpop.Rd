@@ -4,7 +4,14 @@
 \alias{gfpop}
 \title{Graph-Constrained Functional Pruning Optimal Partitioning (gfpop)}
 \usage{
-gfpop(data, mygraph, type = "mean", weights = NULL, testMode = FALSE)
+gfpop(
+  data,
+  mygraph,
+  type = "mean",
+  weights = NULL,
+  testMode = FALSE,
+  rule = NULL
+)
 }
 \arguments{
 \item{data}{vector of data to segment. For simulation studies, Data can be generated using gfpop package function \code{\link[gfpop:dataGenerator]{gfpop::dataGenerator()}}}
@@ -16,6 +23,8 @@ gfpop(data, mygraph, type = "mean", weights = NULL, testMode = FALSE)
 \item{weights}{vector of weights (positive numbers), same size as data}
 
 \item{testMode}{boolean. \code{FALSE} by default. Used to debug the code}
+
+\item{rule}{an optional integer vector, same length as \code{data}, giving the rule identifier of each data point for time-dependent constraints. At each data point only the graph edges whose \code{rule} matches (or whose \code{rule} is \code{NA}, meaning always active) are used. Default \code{NULL} disables filtering (all edges active everywhere), reproducing standard gfpop.}
 }
 \value{
 a gfpop object = (\code{changepoints, states, forced, parameters, globalCost})

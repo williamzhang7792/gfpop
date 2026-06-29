@@ -7,9 +7,10 @@
 //####### constructor #######////####### constructor #######////####### constructor #######//
 //####### constructor #######////####### constructor #######////####### constructor #######//
 
-Omega::Omega(Graph graph)
+Omega::Omega(Graph graph, std::vector<unsigned int> rule_vec)
 {
   m_graph = graph;
+  this->rule_vec = rule_vec;
 	p = graph.nb_states();
 	q = graph.nb_edges();
 
@@ -195,7 +196,11 @@ void Omega::LP_edges_operators(unsigned int t)
     // COMMENT: i-th edge = m_graph.getEdge(i)
     // COMMENT: starting state = m_graph.getEdge(i).getState1()
     // COMMENT: t is the label to associate to the constraint
-    LP_edges[i].LP_edges_constraint(LP_ts[t][m_graph.getEdge(i).getState1()], m_graph.getEdge(i), t);
+    // COMMENT: skip edges that are off for this rule
+    if(rule_vec.empty() || m_graph.isActive(i, rule_vec[t]))
+    {
+      LP_edges[i].LP_edges_constraint(LP_ts[t][m_graph.getEdge(i).getState1()], m_graph.getEdge(i), t);
+    }
   }
 }
 
@@ -223,7 +228,11 @@ void Omega::LP_t_new_multipleMinimization(unsigned int t)
   {
     while((k < q) && (m_graph.getEdge(k).getState2() == j))
     {
-      LP_ts[t + 1][j].LP_ts_Minimization(LP_edges[k]);
+      // COMMENT: only active edges; inactive ones keep the +Inf set in initialize_LP_ts
+      if(rule_vec.empty() || m_graph.isActive(k, rule_vec[t]))
+      {
+        LP_ts[t + 1][j].LP_ts_Minimization(LP_edges[k]);
+      }
       k = k + 1;
       /*
       std::cout << " SHOW ";

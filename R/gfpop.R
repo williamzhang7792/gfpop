@@ -13,6 +13,7 @@
 #' @param type a string defining the cost model to use: \code{"mean"}, \code{"variance"}, \code{"poisson"}, \code{"exp"}, \code{"negbin"}
 #' @param weights vector of weights (positive numbers), same size as data
 #' @param testMode boolean. \code{FALSE} by default. Used to debug the code
+#' @param rule an optional integer vector, same length as \code{data}, giving the rule identifier of each data point for time-dependent constraints. At each data point only the graph edges whose \code{rule} matches (or whose \code{rule} is \code{NA}, meaning always active) are used. Default \code{NULL} disables filtering (all edges active everywhere), reproducing standard gfpop.
 #' @return a gfpop object = (\code{changepoints, states, forced, parameters, globalCost})
 #' \describe{
 #' \item{\code{changepoints}}{is the vector of changepoints (we give the last element of each segment)}
@@ -73,7 +74,7 @@
 #'  myData <- dataGenerator(n, c(0.12, 0.31, 0.53, 0.88, 1), c(1, 2, 0, 1, 2), type = "mean")
 #'  outliers <- 5 * rbinom(n, 1, 0.05) - 5 * rbinom(n, 1, 0.05)
 #'  gfpop(data =  myData + outliers, mygraph = paperGraph(8, penalty = 2 * log(n)), type = "mean")
-gfpop <- function(data, mygraph, type = "mean", weights = NULL, testMode = FALSE)
+gfpop <- function(data, mygraph, type = "mean", weights = NULL, testMode = FALSE, rule = NULL)
 {
   #enforce factor to string if necessary
   mygraph$state1 <- as.character(mygraph$state1)
@@ -99,6 +100,17 @@ gfpop <- function(data, mygraph, type = "mean", weights = NULL, testMode = FALSE
   if(length(data) < 2){stop('data vector length is less than 2...')}
   if(any(is.na(data)))stop("data has missing values, please remove them")
 
+  ### if we have a rule vector (time-dependent constraints)
+  if(!is.null(rule))
+  {
+    if(length(data) != length(rule)){stop('data vector and rule vector have different sizes')}
+    if(any(is.na(rule))){stop('rule vector has missing values')}
+    if(!all(rule == floor(rule)) || any(rule < 1)){stop('rule must contain positive integers')}
+    graph.rules <- unique(mygraph$rule[!is.na(mygraph$rule)])
+    if(!all(rule %in% graph.rules)){stop('rule contains ids not present in the graph')}
+    rule <- as.integer(rule)
+  }
+
   ######################
   ### GRAPH ANALYSIS ###
   ######################
@@ -112,7 +124,7 @@ gfpop <- function(data, mygraph, type = "mean", weights = NULL, testMode = FALSE
   ### CALL Rcpp functions ###
   ###########################
 
-  res <- gfpopTransfer(data, newGraph, type, weights, testMode)
+  res <- gfpopTransfer(data, newGraph, type, weights, testMode, rule)
 
   ############################
   ### Response class gfpop ###

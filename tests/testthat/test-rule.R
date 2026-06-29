@@ -91,3 +91,48 @@ test_that("rule column is read by the solver but is inert (no effect yet)", {
   expect_equal(fit_na$parameters, fit_r1$parameters)
   expect_equal(fit_na$globalCost, fit_r1$globalCost)
 })
+
+## rule 1 = change allowed, rule 2 = stay only
+rule_graph <- function(p) {
+  graph(
+    Edge("a", "a", "null"),                       # NA: always active
+    Edge("a", "a", "std", penalty = p, rule = 1), # rule 1: change allowed
+    Edge("a", "a", "null", rule = 2))             # rule 2: stay only
+}
+
+test_that("no rule argument equals all-active (rule = 1 everywhere)", {
+  set.seed(11)
+  x <- c(rnorm(40, 0), rnorm(40, 10))
+  g <- rule_graph(2 * log(length(x)))
+  fit_norule <- gfpop(x, g, type = "mean")
+  fit_all1   <- gfpop(x, g, type = "mean", rule = rep(1L, length(x)))
+  expect_identical(fit_norule$changepoints, fit_all1$changepoints)
+  expect_equal(fit_norule$parameters, fit_all1$parameters)
+  expect_equal(fit_norule$globalCost, fit_all1$globalCost)
+})
+
+test_that("rule filtering changes the segmentation", {
+  set.seed(11)
+  x <- c(rnorm(40, 0), rnorm(40, 10))
+  g <- rule_graph(2 * log(length(x)))
+  ## rule 1: std edge can fire
+  fit_change <- gfpop(x, g, type = "mean", rule = rep(1L, length(x)))
+  ## rule 2: stay only -> one segment
+  fit_block  <- gfpop(x, g, type = "mean", rule = rep(2L, length(x)))
+  expect_true(length(fit_change$changepoints) >= 2)
+  expect_identical(length(fit_block$changepoints), 1L)
+  expect_identical(fit_block$changepoints, length(x))
+})
+
+test_that("gfpop validates the rule argument", {
+  x <- c(rnorm(20, 0), rnorm(20, 5))
+  g <- rule_graph(2 * log(length(x)))
+  expect_error(gfpop(x, g, type = "mean", rule = rep(1L, length(x) - 1)),
+               "different sizes")
+  bad.na <- rep(1L, length(x)); bad.na[3] <- NA
+  expect_error(gfpop(x, g, type = "mean", rule = bad.na), "missing values")
+  expect_error(gfpop(x, g, type = "mean", rule = rep(0L, length(x))),
+               "positive integers")
+  expect_error(gfpop(x, g, type = "mean", rule = rep(9L, length(x))),
+               "not present in the graph")
+})

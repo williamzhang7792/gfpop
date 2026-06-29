@@ -15,7 +15,7 @@
 using namespace Rcpp;
 
 // [[Rcpp::export]]
-List gfpopTransfer(NumericVector vectData, DataFrame mygraph, std::string type, NumericVector vectWeight, bool testMode)
+List gfpopTransfer(NumericVector vectData, DataFrame mygraph, std::string type, NumericVector vectWeight, bool testMode, Rcpp::Nullable<Rcpp::IntegerVector> rule = R_NilValue)
 {
   ///////////////////////////////////////////
   /////////// DATA TRANSFORMATION ///////////
@@ -134,7 +134,16 @@ List gfpopTransfer(NumericVector vectData, DataFrame mygraph, std::string type, 
   /////////// OMEGA ///////////
   /////////////////////////////
 
-  Omega omega(graph);
+  ///per-point rule vector; NULL = no filtering
+  std::vector<unsigned int> rule_vec;
+  if(rule.isNotNull())
+  {
+    Rcpp::IntegerVector r(rule);
+    rule_vec.resize(r.size());
+    for(int i = 0; i < r.size(); i++){rule_vec[i] = (unsigned int) r[i];}
+  }
+
+  Omega omega(graph, rule_vec);
   if(testMode == FALSE){omega.gfpop(data);}else{omega.gfpopTestMode(data);}
 
   /////////////////////////////
