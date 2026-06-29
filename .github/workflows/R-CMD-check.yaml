@@ -33,6 +33,7 @@ jobs:
         with:
           extra-packages: |
             any::rcmdcheck
+            any::remotes
             github::vrunge/gfpop.data
           needs: check
       - uses: r-lib/actions/check-r-package@v2
