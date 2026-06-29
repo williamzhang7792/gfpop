@@ -33,6 +33,7 @@ jobs:
           extra-packages: |
             any::rcmdcheck
             any::remotes
+            any::LOPART
             github::vrunge/gfpop.data
           needs: check
       - uses: r-lib/actions/check-r-package@v2
