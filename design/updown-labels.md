@@ -31,23 +31,26 @@ constraint). So validation is structural, not a match against another package.
 
 - `Dw` - at baseline / valley, changes still allowed.
 - `Up` - elevated / on a peak, changes still allowed.
-- `noChangeUp` - risen, and the up-phase's one allowed change is spent (null lock).
-- `noChangeDw` - fallen, and the down-phase's one allowed change is spent (null lock).
+- `noChangeUp` - risen, and the peakStart's one allowed change is spent (null lock).
+- `noChangeDw` - fallen, and the peakEnd's one allowed change is spent (null lock).
 
 The two `noChange*` states are the up-down analog of LOPART's single `noChange`:
 they record "the one change for this phase has been used" so the null self-loop
 is the only remaining move until a rule releases the lock.
 
-## 2. Candidate 6-rule design (to pressure-test)
+## 2. The 6-rule design (peakStart / peakEnd)
 
-Core idea: a positive label region should contain exactly one peak = one `up`
-then one `down`. A peak has two events, so LOPART's `(in, end)` pair for its
-single change is *doubled* across the two phases of the peak:
+Core idea: use the standard genomic peak-detection labels, where each positive
+label asserts exactly one change of a known direction - a `peakStart` region
+holds one `up`, a `peakEnd` region holds one `down`. So the model is two copies
+of LOPART's `(in, end)` pair, one per direction:
 
-- up-phase: in (rule 3), end (rule 4)
-- down-phase: in (rule 5), end (rule 6)
+- peakStart: in (rule 3), end (rule 4)
+- peakEnd: in (rule 5), end (rule 6)
 
-That is 4 positive rules, plus unlabeled (rule 1) and negative (rule 2) = 6.
+That is 4 positive rules, plus unlabeled (rule 1) and negative/noPeaks
+(rule 2) = 6. Each labeled region then contains exactly one changepoint, which
+matches the proposal's invariant wording directly.
 
 State x rule edge matrix, one bullet per rule (each edge is `state1 -> state2 type`):
 
@@ -56,30 +59,34 @@ State x rule edge matrix, one bullet per rule (each edge is `state1 -> state2 ty
   - `Up -> Up` null
   - `Dw -> Up` up
   - `Up -> Dw` down
-- Rule 2 - In negative label (flat, no change)
+- Rule 2 - In noPeaks label (flat, no change)
   - `Dw -> Dw` null
   - `Up -> Up` null
-- Rule 3 - In positive label, up-phase (at most one up-change)
+- Rule 3 - In peakStart (at most one up-change)
   - `Dw -> Dw` null
   - `Dw -> noChangeUp` up
   - `noChangeUp -> noChangeUp` null
-- Rule 4 - End of up-phase (count the rise, release the lock)
-  - `Dw -> noChangeUp` up
+- Rule 4 - End of peakStart (force the up, land in Up)
+  - `Dw -> Up` up
   - `noChangeUp -> Up` null
-- Rule 5 - In positive label, down-phase (at most one down-change)
+- Rule 5 - In peakEnd (at most one down-change)
   - `Up -> Up` null
   - `Up -> noChangeDw` down
   - `noChangeDw -> noChangeDw` null
-- Rule 6 - End of down-phase (count the fall, release the lock)
-  - `Up -> noChangeDw` down
+- Rule 6 - End of peakEnd (force the down, land in Dw)
+  - `Up -> Dw` down
   - `noChangeDw -> Dw` null
 
 `StartEnd`: start `Dw`, end `Dw` (a peak returns to baseline).
 
-Traversal of one positive peak region: start `Dw`, rules 3/4 take `Dw -> Up`
-(exactly one rise, locked in between), rules 5/6 take `Up -> Dw` (exactly one
-fall). After the region we are back in `Dw` and rule 1 resumes. The lock states
-are what cap each phase at a single change.
+The `noChangeUp` / `noChangeDw` states are entered only mid-region (rules 3/5)
+to lock out a second change. The end rules (4/6) never enter a lock state: the
+forced change lands directly in the released state (`Dw -> Up`, `Up -> Dw`), so
+the phase-end index ends in `Up` (peakStart) or `Dw` (peakEnd) whether or not
+the change already happened - the trick LOPART uses to avoid a single index
+doing two jobs. A peakStart region traverses `Dw -> Up` (exactly one rise); a
+later peakEnd region traverses `Up -> Dw` (exactly one fall). Between them, and
+after, rule 1 resumes from `Up` or `Dw` respectively.
 
 Union of all edges across rules (states + transition types):
 
@@ -99,14 +106,14 @@ Generalizes `lopart_rule_vec(n, labels)`. Input: data length `n` and a labels
 table of regions; output: length-`n` integer rule vector. Assignment:
 
 - unlabeled positions -> 1
-- negative label region -> 2
-- positive label, up-phase interior -> 3, up-phase end index -> 4
-- positive label, down-phase interior -> 5, down-phase end index -> 6
+- noPeaks label region -> 2
+- peakStart region: interior -> 3, last index -> 4
+- peakEnd region: interior -> 5, last index -> 6
 
-The one thing this mapping needs from the label geometry is where the up-phase
-ends and the down-phase begins inside a positive region (see Open Questions).
-Peak-detection label sets typically carry this as separate `peakStart` /
-`peakEnd` label types rather than a single positive span.
+Labels are a `data.frame(start, end, type)` with `type` in {`peakStart`,
+`peakEnd`, `noPeaks`}. No sub-phase split is needed: each label is a single
+region with a known direction, so the mapping is a direct generalization of
+`lopart_rule_vec()`.
 
 ## 4. Filmstrip
 
@@ -124,8 +131,9 @@ Acceptance criteria the design must meet, carried into July 6 as tests:
 - Backward-compat: an all-rule-1 vector reproduces `graph(type = "updown")`
   exactly (same changepoints, means, cost) - the equivalence check, analogous to
   the LOPART all-unlabeled test.
-- Structural invariants on synthetic labeled peaks: exactly one up + one down per
-  positive region, zero changes per negative region.
+- Structural invariants on synthetic labeled peaks: exactly one changepoint per
+  positive label (an up in each peakStart, a down in each peakEnd), zero changes
+  per noPeaks region.
 - Each per-rule active-edge set is a valid, reachable subgraph consistent with
   `StartEnd` (no orphan states, no dead ends).
 - Alternation preserved: within a peak, `up` precedes `down`.
@@ -133,22 +141,26 @@ Acceptance criteria the design must meet, carried into July 6 as tests:
   rule-to-edge lookup stays contiguous after `graphReorder()`. Flagged here for
   July 6, not solved in this note.
 
-## 6. Open questions (resolve before July 6)
+## 6. Resolved decisions and remaining questions
 
-- Peak = two changepoints (up + down) vs the proposal's "exactly one changepoint
-  per positive label" phrasing. The invariant wording needs to match the
-  two-event peak, or the model needs to target a single event (e.g. only the
-  rise) per positive label.
-- End-rule semantics at a single index. A phase-end index cannot both force the
-  change and release the lock in the same step: if we are still in `Dw` at the
-  up-end index, rule 4 rises into `noChangeUp` but cannot also release to `Up`.
-  This strongly implies the up-phase and down-phase each need their own
-  end index, i.e. positive regions must be delimited as `peakStart` / `peakEnd`
-  rather than one span. Decide the label geometry, then finalize rules 4 and 6.
-- Force vs allow: should rules 4/6 hard-require the change (peak must exist) or
-  merely permit it? This changes whether a positive label can be "empty".
-- Confirm 4 states suffice for the chosen semantics (the proposal fixes 4; verify
-  no 5th state is needed once the end-rule question is settled).
+Resolved (drove the design above):
+
+- Labels are peakStart / peakEnd / noPeaks, each a single region of known
+  direction, so a positive label holds exactly one changepoint - matching the
+  proposal's invariant. (Was: one positive span with two events.)
+- The end rules (4/6) route the forced change straight to the released state
+  (`Dw -> Up`, `Up -> Dw`) and never into a lock, so a single end index does one
+  job. (Was: the single-index conflict.)
+- 4 states suffice: the lock states are entered only mid-region and exited by the
+  end rule, so no 5th state is needed.
+
+Still open:
+
+- Force vs allow. Rules 4/6 as written force the change (the end index has no
+  null self-loop keeping you in `Dw`/`Up`), so a labeled region cannot be empty.
+  That is the intended peak-detection semantics, but if "label present, no peak"
+  must be representable, add a null self-loop to the end rule and drop the hard
+  requirement.
 
 ## 7. Handoff to July 6
 
