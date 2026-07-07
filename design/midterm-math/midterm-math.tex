@@ -31,7 +31,7 @@
 \newcommand{\Op}{\mathcal{O}}
 
 \title{\textbf{Time-Dependent Constraints in \texttt{gfpop}}\\[2pt]
-\large A mathematical description of the midterm deliverable}
+\large The math behind the midterm work}
 \author{}
 \date{}
 
@@ -41,29 +41,30 @@
 
 \begin{abstract}
 \noindent \texttt{gfpop} solves penalized change-point problems under a
-user-specified constraint graph, but the \emph{same} graph is imposed at every
-time step. This note develops the mathematics of an extension in which the
-active constraints may depend on the time index through a \emph{rule map}. We
-formalise the recursion, prove that the extension is a strict generalisation
-(it reduces to ordinary \texttt{gfpop} when the rule is constant) and that
-unreachable states are handled automatically by the existing infinity
-arithmetic. We then encode two labelled change-point models as time-dependent
-graphs --- the Gaussian LOPART model and an up-down peak model that no current
-R package expresses --- and trace the full dynamic program on a ten-point
-dataset, cross-checked exactly against \texttt{LOPART::LOPART()}. Every number
-in Section~\ref{sec:run} is produced by an accompanying R script.
+user-specified constraint graph, but it imposes the \emph{same} graph at every
+time step. This note is the math behind my midterm work: an extension where the
+active constraints can depend on the time index through a \emph{rule map}. I
+write down the recursion, show it is a strict generalisation (with a constant
+rule it reduces to ordinary \texttt{gfpop}), and show that unreachable states
+take care of themselves through the infinity arithmetic the solver already has.
+I then build two labelled change-point models on top of it: the Gaussian LOPART
+model, and an up-down peak model that no current R package expresses. The last
+section traces the full dynamic program on a ten-point dataset and checks it
+exactly against \texttt{LOPART::LOPART()}. Every number in
+Section~\ref{sec:run} comes from an accompanying R script, not by hand.
 \end{abstract}
 
 %======================================================================
 \section{Motivation}\label{sec:motivation}
 
-Consider the following $n=\dataN$ observations (our running example throughout):
+Here are $n=\dataN$ observations; they are the running example for the whole
+note:
 \[
   x = (\dataX).
 \]
-An analyst has annotated two regions: a \emph{positive} label on $[3,6]$
-asserting that \emph{exactly one} change occurs there, and a \emph{negative}
-label on $[8,10]$ asserting that \emph{no} change occurs there (Figure~\ref{fig:data}).
+Suppose an analyst has annotated two regions: a \emph{positive} label on $[3,6]$
+saying \emph{exactly one} change happens there, and a \emph{negative}
+label on $[8,10]$ saying \emph{no} change happens there (Figure~\ref{fig:data}).
 
 \begin{figure}[h]
 \centering
@@ -83,20 +84,20 @@ expected) and the negative label (red, no change expected).}
 \label{fig:data}
 \end{figure}
 
-The data clearly step up once, near $t=4$--$5$. Standard penalized
-segmentation would find this change from the data alone; but it has no way to
-\emph{use} the analyst's labels, which encode where changes are or are not
-permitted. \texttt{gfpop} can encode rich structural constraints through a
-graph, yet that graph is fixed across time, whereas a label is intrinsically
-\emph{positional}: it constrains some indices and not others. Bridging that gap
-is the subject of this note. The motivating application is genomic peak
-detection, where experts label regions of a coverage profile as containing a
-peak or not, and one wants a segmentation consistent with those labels.
+The data clearly step up once, around $t=4$--$5$, and standard penalized
+segmentation would find that change from the data alone. What it cannot do is
+\emph{use} the labels. \texttt{gfpop} can encode rich structural constraints
+through a graph, but the graph is the same at every time step, and a label is
+inherently \emph{positional}: it constrains some indices and not others. That
+mismatch is the whole problem, and closing it is what this note is about. The
+motivating application is genomic peak detection, where experts mark regions of
+a coverage profile as containing a peak or not, and the segmentation should
+respect those marks.
 
 %======================================================================
 \section{Background: penalized change-point detection}\label{sec:back-fpop}
 
-Write a segmentation of $x_{1:n}$ through its vector of segment means
+Describe a segmentation of $x_{1:n}$ by its vector of segment means
 $\mu_{1:n}$, constant on each segment, with a change at $t$ whenever
 $\mu_t \neq \mu_{t+1}$. For Gaussian (least-squares) loss the penalized
 objective is
@@ -104,19 +105,20 @@ objective is
   \min_{\mu_{1:n}} \ \sum_{t=1}^n (x_t-\mu_t)^2
     \ +\ \lambda \, \bigl|\{\, t< n : \mu_t \neq \mu_{t+1}\,\}\bigr|,
 \end{equation}
-with penalty $\lambda>0$ discouraging spurious changes. Optimal partitioning
-solves \eqref{eq:objective} by the dynamic program that tracks, as a function
-of the last segment's mean, the best cost of a prefix. \texttt{gfpop} keeps the
-exact \emph{cost function}
+where the penalty $\lambda>0$ keeps spurious changes out. Optimal partitioning
+solves \eqref{eq:objective} with a dynamic program over prefixes, and the trick
+in \texttt{gfpop} is to track the best prefix cost \emph{as a function of the
+last segment's mean}:
 \[
   Q_t(\mu) \;=\; \min\bigl\{\, \text{penalized cost of } x_{1:t}
       \ \text{with last mean } \mu \,\bigr\},
 \]
-a piecewise quadratic in $\mu$. Two operations recur: adding a data point,
-$Q(\mu)\mapsto Q(\mu)+(x_t-\mu)^2$ (a quadratic shift), and committing a change,
-$Q \mapsto \min_\nu Q(\nu) + \lambda$ (a constant). Functional pruning keeps only
-the lower envelope of the candidate quadratics; the minimum over $\mu$ is read
-from that envelope (Figure~\ref{fig:envelope}).
+a piecewise quadratic in $\mu$. Only two operations ever happen to it: adding a
+data point, $Q(\mu)\mapsto Q(\mu)+(x_t-\mu)^2$ (a quadratic shift), and
+committing a change, $Q \mapsto \min_\nu Q(\nu) + \lambda$ (a constant).
+Functional pruning keeps just the lower envelope of the candidate quadratics,
+and the minimum over $\mu$ is read straight off that envelope
+(Figure~\ref{fig:envelope}).
 
 \begin{figure}[h]
 \centering
@@ -137,10 +139,10 @@ $Q_t(\mu)$ is such an envelope; $\min_\mu Q_t(\mu)$ is its lowest point.}
 \end{figure}
 
 \begin{example}\label{ex:micro}
-On the first three points $x_1,x_2,x_3 = 0.2,-0.1,0.1$, if no change is taken,
+Take the first three points $x_1,x_2,x_3 = 0.2,-0.1,0.1$ and allow no change:
 $Q_3(\mu)=(0.2-\mu)^2+(-0.1-\mu)^2+(0.1-\mu)^2 = 3\mu^2-0.4\mu+0.06$, minimised
-at $\bar x=0.0\overline{6}$ with value $\approx 0.047$ (the $t=3$, ``normal''
-entry of Table~\ref{tab:Q}).
+at $\bar x=0.0\overline{6}$ with value $\approx 0.047$. That is exactly the
+$t=3$, ``normal'' entry of Table~\ref{tab:Q} later on.
 \end{example}
 
 %======================================================================
@@ -159,14 +161,15 @@ while \texttt{up}/\texttt{down} additionally impose $\mu'\ge\nu$ / $\mu'\le\nu$
 on the committed change.
 \end{definition}
 
-A state carries one cost function $Q_t^{s}$ per time. The recursion couples
-states through the edges: for each destination $s'$,
+Each state carries its own cost function $Q_t^{s}$ at each time, and the edges
+are what couple them: for each destination $s'$,
 \begin{equation}\label{eq:gfpop-rec}
   Q_{t}^{s'}(\mu) \;=\; \Bigl[\ \min_{e=(s\to s')\in E}\ \Op_e\bigl(Q_{t-1}^{s}\bigr)(\mu)\ \Bigr]
       \;+\; (x_{t}-\mu)^2 ,
 \end{equation}
 initialised at $t=1$ with $Q_1^{s}(\mu)=(x_1-\mu)^2$ for the start state and
-$+\infty$ otherwise. Figure~\ref{fig:graphs} shows the two graphs we build on.
+$+\infty$ everywhere else. Figure~\ref{fig:graphs} shows the two standard graphs
+everything below builds on.
 
 \begin{figure}[h]
 \centering
@@ -197,8 +200,8 @@ segment; other edges (\texttt{std}/\texttt{up}/\texttt{down}) commit a change.}
 %======================================================================
 \section{The extension: time-dependent constraints}\label{sec:extension}
 
-The single premise of \eqref{eq:gfpop-rec} we relax is that the minimisation
-ranges over \emph{all} of $E$ at every step.
+The extension changes exactly one thing in \eqref{eq:gfpop-rec}: the
+minimisation no longer has to range over \emph{all} of $E$ at every step.
 
 \begin{definition}[Rule map and active set]\label{def:rule}
 Fix $R$ rules. A \emph{rule map} is a function $\Rmap:\{1,\dots,n\}\to\{1,\dots,R\}$.
@@ -212,9 +215,9 @@ steps their rule selects. The recursion is \eqref{eq:gfpop-rec} with $E$
 replaced by $E_t$.
 \end{definition}
 
-Equivalently, one time-independent graph is \emph{sliced} per step: at time $t$
-the solver sees the subgraph $(S,E_t)$. Figure~\ref{fig:timeexp} shows two
-different slices of the same graph.
+Another way to see it: there is still one graph, but it gets \emph{sliced} per
+step, and at time $t$ the solver only sees the subgraph $(S,E_t)$.
+Figure~\ref{fig:timeexp} shows two different slices of the same graph.
 
 \begin{figure}[h]
 \centering
@@ -250,7 +253,9 @@ active edge set changes with $\Rmap(t)$.}
 \label{fig:timeexp}
 \end{figure}
 
-Two facts make this safe and cheap to add on top of the existing solver.
+Two small facts are what make this safe and cheap to bolt onto the existing
+solver, and they are worth stating properly because together they explain why
+the C++ changes stayed so small.
 
 \begin{proposition}[Backward compatibility]\label{prop:bc}
 If $\Rmap\equiv c$ is constant and every edge has $r(e)\in\{\textsc{na},c\}$,
@@ -259,10 +264,11 @@ then $E_t=E$ for all $t$ and the recursion coincides with ordinary
 \end{proposition}
 \begin{proof}
 By Definition~\ref{def:rule}, $e\in E_t$ iff $r(e)=\textsc{na}$ or
-$r(e)=\Rmap(t)=c$. Under the hypothesis every edge satisfies one of these, so
-$E_t=E$ for every $t$, and \eqref{eq:gfpop-rec} is recovered verbatim. In
-particular, supplying no rule (all edges \textsc{na}) leaves the output
-unchanged.
+$r(e)=\Rmap(t)=c$. Under the hypothesis every edge satisfies one of the two, so
+$E_t=E$ for every $t$, and \eqref{eq:gfpop-rec} comes back verbatim. In
+particular, supplying no rule at all (every edge \textsc{na}) leaves the output
+unchanged --- this is the backward-compatibility guarantee, and it is tested
+directly.
 \end{proof}
 
 \begin{lemma}[Infinity semantics]\label{lem:inf}
@@ -274,27 +280,28 @@ $\Op_{\texttt{std}}(+\infty)=\min_\nu(+\infty)+\beta=+\infty$.
 \end{lemma}
 \begin{proof}
 The bracketed minimum in \eqref{eq:gfpop-rec} is over the empty set, hence
-$+\infty$; adding $(x_t-\mu)^2$ leaves $+\infty$. The operator identities are
-immediate. Consequently an unreachable state contributes $+\infty$ to every
-downstream minimisation and is silently ignored, with no case distinction.
+$+\infty$; adding $(x_t-\mu)^2$ keeps it there. The operator identities are
+immediate. So an unreachable state contributes $+\infty$ to every downstream
+minimisation and simply loses --- no case distinction needed anywhere.
 \end{proof}
 
 \begin{remark}
-Lemma~\ref{lem:inf} is why the extension required \emph{no} change to
-\texttt{gfpop}'s constraint operators (including the intricate
-\texttt{up}/\texttt{down} code): skipping an inactive edge simply leaves its
-destination at the $+\infty$ the solver already initialises, and the existing
-arithmetic propagates it correctly.
+Lemma~\ref{lem:inf} is the reason the extension needed \emph{no} change to
+\texttt{gfpop}'s constraint operators, including the intricate
+\texttt{up}/\texttt{down} code that my proposal had flagged as the main risk.
+Skipping an inactive edge just leaves its destination at the $+\infty$ the
+solver already initialises, and the existing arithmetic carries it through.
 \end{remark}
 
 %======================================================================
 \section{Model I: LOPART as a 4-rule, 2-state graph}\label{sec:lopart}
 
-LOPART (Hocking \& Srivastava) performs Gaussian change-point detection subject
-to labels: a positive region must contain exactly one change, a negative region
-none. We reproduce it with states $S=\{\texttt{normal},\texttt{noChange}\}$ and
-four rules, one per label context. The lock state \texttt{noChange} records that
-the single change permitted in a positive region has been spent.
+LOPART (Hocking \& Srivastava) does Gaussian change-point detection subject to
+labels: a positive region must contain exactly one change, a negative region
+none. It turns out two states are enough to reproduce it:
+$S=\{\texttt{normal},\texttt{noChange}\}$, with four rules, one per label
+context. The whole idea sits in the lock state \texttt{noChange}, which records
+that the one change a positive region allows has been spent.
 
 \begin{figure}[h]
 \centering
@@ -328,9 +335,9 @@ the single change permitted in a positive region has been spent.
 \label{fig:lopart-film}
 \end{figure}
 
-The label-to-rule map assigns each unlabelled index rule $1$; inside a positive
-region, rule $2$, except its last index which gets rule $3$; inside a negative
-region, rule $4$.
+The label-to-rule map is simple: unlabelled indices get rule $1$; a positive
+region gets rule $2$, except its last index, which gets rule $3$; a negative
+region gets rule $4$.
 
 \begin{proposition}[Encoding correctness]\label{prop:lopart}
 Under the filmstrip of Figure~\ref{fig:lopart-film}, the feasible state paths are
@@ -338,17 +345,18 @@ exactly the segmentations in which every positive region carries exactly one
 change and every negative region none.
 \end{proposition}
 \begin{proof}[Proof sketch]
-Enter a positive region in \texttt{normal}. Rule $2$ offers $n\to n$
-(\texttt{null}, no change) or the single $n\to c$ (\texttt{std}, one change);
-once in $c$ only $c\to c$ (\texttt{null}) is available, so at most one change
-occurs. The region's last index uses rule $3$, whose only options are
-$n\to n$ \texttt{std} (force the change if still in $n$) or $c\to n$
-\texttt{null} (release if the change was already taken); there is no
-$n\to n$ \texttt{null}, so the path cannot leave the region with zero changes.
-Hence exactly one. A negative region (rule $4$) offers only $n\to n$
-\texttt{null}: no change. Unlabelled steps (rule $1$) are the standard model.
-Reading the construction backwards recovers a state path from any label-feasible
-segmentation, giving the bijection.
+Follow a path through a positive region, entering in \texttt{normal}. Rule $2$
+offers $n\to n$ (\texttt{null}, no change) or the single $n\to c$ (\texttt{std},
+one change); once in $c$ the only move is $c\to c$ (\texttt{null}), so at most
+one change happens. The region's last index runs under rule $3$, and here is the
+key: its only options are $n\to n$ \texttt{std} (force the change if you are
+still in $n$) or $c\to n$ \texttt{null} (release if the change was already
+taken). There is deliberately no $n\to n$ \texttt{null}, so a path cannot slip
+out of the region with zero changes. At most one and at least one: exactly one.
+A negative region (rule $4$) offers nothing but $n\to n$ \texttt{null}, so no
+change; unlabelled steps (rule $1$) are just the standard model. Running the
+construction backwards turns any label-feasible segmentation into a state path,
+which gives the bijection.
 \end{proof}
 
 \begin{lemma}[Loss identity]\label{lem:loss}
@@ -357,31 +365,34 @@ residual cost and $L$ be \texttt{LOPART}'s reported \texttt{total\_loss} on the
 same fit. Then $C_{\mathrm{gf}} = \sum_t x_t^2 + L$.
 \end{lemma}
 \begin{proof}
-The two implementations minimise the same penalized objective and hence agree on
-the optimal segmentation; they differ only in the additive constant reported as
-``loss''. \texttt{LOPART} omits the data-only term $\sum_t x_t^2$ (independent of
-$\mu$), so its loss equals $C_{\mathrm{gf}}-\sum_t x_t^2$. Rearranging gives the
-identity, verified numerically in Table~\ref{tab:oracle}
-($\sse = \sumsq - \lopartLossAbs$).
+Both implementations minimise the same penalized objective, so they agree on the
+optimal segmentation; the only difference is an additive constant in what each
+one calls ``loss''. \texttt{LOPART} drops the data-only term $\sum_t x_t^2$,
+which does not depend on $\mu$, so its loss is $C_{\mathrm{gf}}-\sum_t x_t^2$.
+Rearranging gives the identity. Table~\ref{tab:oracle} checks it numerically:
+$\sse = \sumsq - \lopartLossAbs$.
 \end{proof}
 
 %======================================================================
 \section{Model II: up-down with labels (6 rules, 4 states)}\label{sec:updown}
 
-The same mechanism expresses a model that, to our knowledge, no current R
-package provides: labelled \emph{peak} detection under an up-down constraint.
-Here a peak is a rise (\texttt{up}) followed later by a fall (\texttt{down}).
-States are $\{\texttt{Dw},\texttt{Up},\texttt{noChangeUp},\texttt{noChangeDw}\}$,
-the two lock states playing the role of \texttt{noChange} for each direction.
+The same mechanism buys a model that, as far as I can tell, no current R
+package provides: labelled \emph{peak} detection under an up-down constraint,
+where a peak is a rise (\texttt{up}) followed later by a fall (\texttt{down}).
+The states are
+$\{\texttt{Dw},\texttt{Up},\texttt{noChangeUp},\texttt{noChangeDw}\}$; the two
+lock states play the \texttt{noChange} role, one per direction.
 
-Peak-detection labels come in two positive flavours --- \texttt{peakStart}
-(exactly one \texttt{up}) and \texttt{peakEnd} (exactly one \texttt{down}) ---
-plus \texttt{noPeaks} (flat). Each is the LOPART \emph{(in, end)} pair applied to
-one direction, giving $2+2$ positive rules plus unlabelled and \texttt{noPeaks}:
-six in total. A single design point makes the end rules well-defined: the forced
-change lands directly in the released state ($\texttt{Dw}\to\texttt{Up}$,
-$\texttt{Up}\to\texttt{Dw}$) rather than in a lock, so one index performs one
-action.
+Peak-detection labels come in two positive flavours, \texttt{peakStart}
+(exactly one \texttt{up}) and \texttt{peakEnd} (exactly one \texttt{down}),
+plus \texttt{noPeaks} (flat). Each positive flavour is just LOPART's
+\emph{(in, end)} rule pair applied to one direction, so the count works out to
+$2+2$ positive rules plus unlabelled plus \texttt{noPeaks}: six. One design
+decision makes the end rules well-defined: the forced change lands directly in
+the released state ($\texttt{Dw}\to\texttt{Up}$, $\texttt{Up}\to\texttt{Dw}$)
+rather than in a lock, so a single index only ever does one job. Getting that
+wrong was an easy trap --- an end index cannot both fire the change and release
+the lock in the same step.
 
 \begin{figure}[h]
 \centering
@@ -418,19 +429,21 @@ nl $=$ null). Rules 5--6 mirror 3--4 with \texttt{Up}$\to$\texttt{Dw} via
 \label{fig:updown-film}
 \end{figure}
 
-Lacking an oracle, this model is validated \emph{structurally}: on synthetic
-labelled peaks it must place exactly one change in each \texttt{peakStart},
-exactly one in each \texttt{peakEnd}, and none in any \texttt{noPeaks}; and with
-every index unlabelled it must reproduce \texttt{graph(type="updown")} exactly.
-Both hold in the test suite.
+There is no oracle to compare against here (that absence is the point of the
+model), so validation is \emph{structural}: on synthetic labelled peaks the fit
+must place exactly one change in each \texttt{peakStart}, exactly one in each
+\texttt{peakEnd}, and none in any \texttt{noPeaks}; and with every index
+unlabelled it must reproduce \texttt{graph(type="updown")} exactly. Both hold in
+the test suite.
 
 %======================================================================
 \section{The full ten-step run}\label{sec:run}
 
-We now trace Model~I on the dataset of Section~\ref{sec:motivation} with penalty
-$\lambda = 2\log \dataN = \dataLambda$. The rule map is $\Rmap = (\dataSigma)$;
-Table~\ref{tab:sigma} shows how each index's label context selects its active
-edges.
+Time to run the whole thing. This section traces Model~I on the dataset from
+Section~\ref{sec:motivation}, with penalty
+$\lambda = 2\log \dataN = \dataLambda$. The labels turn into the rule map
+$\Rmap = (\dataSigma)$, and Table~\ref{tab:sigma} spells out which edges each
+index's label context switches on.
 
 \begin{table}[h]\centering\small
 \begin{tabular}{ccccl}
@@ -445,15 +458,16 @@ $t$ & $x_t$ & context & $\Rmap(t)$ & active edges ($n=$ normal, $c=$ noChange)\\
 \end{table}
 
 \paragraph{The dynamic program.}
-Table~\ref{tab:Q} lists the per-state minima $m_t^{s}=\min_\mu Q_t^{s}(\mu)$
-(the penalized cost of the best prefix ending in state $s$ at time $t$),
-computed by the functional recursion \eqref{eq:gfpop-rec}. The infinity pattern
-of Lemma~\ref{lem:inf} is visible directly: \texttt{noChange} is $+\infty$
-before the positive label (nothing enters it), becomes finite only for
-$t\in\{3,4,5\}$, and returns to $+\infty$ once rule~3 releases the lock. At
-$t=5$, staying in \texttt{normal} costs $20.45$ (the high point $x_5=5.1$ forced
-into the low segment) whereas \texttt{noChange} costs only $4.66$ --- this is
-exactly why the optimal path commits the change here.
+Table~\ref{tab:Q} lists the per-state minima $m_t^{s}=\min_\mu Q_t^{s}(\mu)$,
+the penalized cost of the best prefix ending in state $s$ at time $t$, computed
+by the functional recursion \eqref{eq:gfpop-rec}. You can see
+Lemma~\ref{lem:inf} in the numbers: \texttt{noChange} sits at $+\infty$ before
+the positive label because nothing enters it, is finite only for
+$t\in\{3,4,5\}$, and goes back to $+\infty$ the moment rule~3 releases the lock.
+The most telling row is $t=5$: staying in \texttt{normal} costs $20.45$ (the
+high point $x_5=5.1$ jammed into the low segment) while \texttt{noChange} costs
+only $4.66$. That gap is the whole reason the optimal path commits the change
+here.
 
 \begin{table}[h]\centering\small
 \begin{tabular}{cccc}
@@ -469,10 +483,10 @@ $\lambda$); $+\infty$ marks an unreachable state.}
 \end{table}
 
 \paragraph{The optimal path.}
-Backtracking the recursion gives the state trellis of
-Figure~\ref{fig:trellis}: the path stays in \texttt{normal}, dips into
-\texttt{noChange} at $t=5$ to absorb the single permitted change, and is
-released back to \texttt{normal} at $t=6$.
+Backtracking the recursion gives the trellis of Figure~\ref{fig:trellis}: the
+path rides along in \texttt{normal}, dips into \texttt{noChange} at $t=5$ to
+spend the one change the label permits, and gets released back to
+\texttt{normal} at $t=6$.
 
 \begin{figure}[h]
 \centering
@@ -503,7 +517,7 @@ $\texttt{normal}\to\texttt{noChange}$ \texttt{std} edge.}
 \end{figure}
 
 \paragraph{The segmentation.}
-The result is $\numChanges$ change, splitting the data into the segments of
+The upshot is $\numChanges$ change, splitting the data into the segments of
 Table~\ref{tab:seg}, drawn over the data in Figure~\ref{fig:fit}.
 
 \begin{minipage}{0.42\textwidth}\centering
@@ -531,9 +545,10 @@ segment & range & mean\\
 \end{minipage}
 
 \paragraph{Oracle cross-check.}
-Running \texttt{LOPART::LOPART()} on the same data, labels and penalty gives an
+Running \texttt{LOPART::LOPART()} on the same data, labels and penalty gives the
 identical fit (Table~\ref{tab:oracle}): same changepoints, same means, and the
-residual cost matching through the constant of Lemma~\ref{lem:loss}.
+residual cost lining up through the constant of Lemma~\ref{lem:loss}. Not close
+--- identical.
 
 \begin{table}[h]\centering\small
 \begin{tabular}{lcc}
@@ -550,21 +565,21 @@ residual cost matching through the constant of Lemma~\ref{lem:loss}.
 %======================================================================
 \section{Validation summary and outlook}\label{sec:summary}
 
-Three kinds of guarantee support the deliverable. \emph{Backward compatibility}
-(Proposition~\ref{prop:bc}) is tested by running each labelled graph with an
-all-unlabelled rule and checking it equals the corresponding standard graph
-exactly. \emph{Oracle exactness} (Model~I) is tested against
-\texttt{LOPART::LOPART()}: identical changepoints, means and cost up to the
-constant of Lemma~\ref{lem:loss}. \emph{Structural invariants} (Model~II, which
-has no oracle) check that each label region receives the mandated number of
-changes. All three pass in continuous integration across Linux, macOS and
-Windows.
+Three kinds of guarantee back all of this, and each one is an actual test, not
+an aspiration. \emph{Backward compatibility} (Proposition~\ref{prop:bc}): run
+each labelled graph with an all-unlabelled rule and check it matches the
+corresponding standard graph exactly. \emph{Oracle exactness} (Model~I): check
+against \texttt{LOPART::LOPART()} for identical changepoints, means and cost up
+to the constant of Lemma~\ref{lem:loss}. \emph{Structural invariants}
+(Model~II, which has no oracle): check that each label region gets exactly the
+number of changes it mandates. All three pass in continuous integration on
+Linux, macOS and Windows.
 
-The remaining work builds on this core: a user-facing vignette with a filmstrip
-visualisation of the rule-sliced graph, performance benchmarks, and an extension
-of the labelled models to Poisson loss. The mathematics above --- a rule map
-selecting an active subgraph per step, with unreachable states absorbed by the
-existing infinity arithmetic --- is the whole mechanism, and it is already
-complete and validated.
+What remains builds on this core: a user-facing vignette with a filmstrip
+visualisation of the rule-sliced graph, performance benchmarks, and extending
+the labelled models to Poisson loss. But the mathematics above --- a rule map
+picking an active subgraph per step, with unreachable states absorbed by the
+infinity arithmetic the solver already had --- is the whole mechanism, and it is
+done and validated.
 
 \end{document}
