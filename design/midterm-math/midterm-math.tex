@@ -267,7 +267,7 @@ By Definition~\ref{def:rule}, $e\in E_t$ iff $r(e)=\textsc{na}$ or
 $r(e)=\Rmap(t)=c$. Under the hypothesis every edge satisfies one of the two, so
 $E_t=E$ for every $t$, and \eqref{eq:gfpop-rec} comes back verbatim. In
 particular, supplying no rule at all (every edge \textsc{na}) leaves the output
-unchanged --- this is the backward-compatibility guarantee, and it is tested
+unchanged. This is the backward-compatibility guarantee, and it is tested
 directly.
 \end{proof}
 
@@ -282,7 +282,7 @@ $\Op_{\texttt{std}}(+\infty)=\min_\nu(+\infty)+\beta=+\infty$.
 The bracketed minimum in \eqref{eq:gfpop-rec} is over the empty set, hence
 $+\infty$; adding $(x_t-\mu)^2$ keeps it there. The operator identities are
 immediate. So an unreachable state contributes $+\infty$ to every downstream
-minimisation and simply loses --- no case distinction needed anywhere.
+minimisation and simply loses; no case distinction is needed anywhere.
 \end{proof}
 
 \begin{remark}
@@ -391,7 +391,7 @@ $2+2$ positive rules plus unlabelled plus \texttt{noPeaks}: six. One design
 decision makes the end rules well-defined: the forced change lands directly in
 the released state ($\texttt{Dw}\to\texttt{Up}$, $\texttt{Up}\to\texttt{Dw}$)
 rather than in a lock, so a single index only ever does one job. Getting that
-wrong was an easy trap --- an end index cannot both fire the change and release
+wrong was an easy trap: an end index cannot both fire the change and release
 the lock in the same step.
 
 \begin{figure}[h]
@@ -547,8 +547,8 @@ segment & range & mean\\
 \paragraph{Oracle cross-check.}
 Running \texttt{LOPART::LOPART()} on the same data, labels and penalty gives the
 identical fit (Table~\ref{tab:oracle}): same changepoints, same means, and the
-residual cost lining up through the constant of Lemma~\ref{lem:loss}. Not close
---- identical.
+residual cost lining up through the constant of Lemma~\ref{lem:loss}. Not
+close, identical.
 
 \begin{table}[h]\centering\small
 \begin{tabular}{lcc}
@@ -577,9 +577,9 @@ Linux, macOS and Windows.
 
 What remains builds on this core: a user-facing vignette with a filmstrip
 visualisation of the rule-sliced graph, performance benchmarks, and extending
-the labelled models to Poisson loss. But the mathematics above --- a rule map
-picking an active subgraph per step, with unreachable states absorbed by the
-infinity arithmetic the solver already had --- is the whole mechanism, and it is
-done and validated.
+the labelled models to Poisson loss. But the whole mechanism is just the
+mathematics above: a rule map picking an active subgraph per step, with
+unreachable states absorbed by the infinity arithmetic the solver already had.
+It is done and validated.
 
 \end{document}
