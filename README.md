@@ -18,9 +18,9 @@
 
 This is the final report for my Google Summer of Code 2026 project with the
 [R Project for Statistical Computing](https://github.com/rstats-gsoc/gsoc2026/wiki/time-dependent-constraints-in-gfpop):
-teaching [gfpop](https://github.com/vrunge/gfpop), Vincent Runge's R package for
-graph-constrained changepoint detection, to let its constraint graph change
-along the signal. It is also the hub for the whole series: each section links
+extending [gfpop](https://github.com/vrunge/gfpop), Vincent Runge's R package
+for graph-constrained changepoint detection, so its constraint graph can
+change along the signal. It is also the hub for the whole series: each section links
 to the post that covers it in detail, starting from
 [the very first one](https://gsoc2026-gfpop.netlify.app/posts/week-1-setup/).
 
