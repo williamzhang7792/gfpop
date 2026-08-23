@@ -1,532 +1,202 @@
-<a id="top"></a>
+<div align="center">
 
-<!--[![Build Status](http://travis-ci.com/vrunge/gfpop.svg?branch=master)](http://travis-ci.com/vrunge/gfpop)
---> 
-[![](https://img.shields.io/badge/docs-vignettes-blue.svg)](https://github.com/vrunge/gfpop)
+# gfpop GSoC 2026 final report
 
-<!-- 
-%\VignetteEngine{knitr::rmarkdown} 
-%\VignetteIndexEntry{An Introduction to gfpop}
---> 
+**William Zhang** · August 23, 2026
 
+[**The blog series**](https://gsoc2026-gfpop.netlify.app/) ·
+[**The proposal**](https://github.com/williamzhang7792/gsoc2026-gfpop-proposal-william-zhang) ·
+[**Upstream gfpop**](https://github.com/vrunge/gfpop)
 
-# gfpop Vignette
-### Vincent Runge
-#### LaMME, Evry University
-### March 2, 2022
+</div>
 
-> [Quick Start](#qs)
+> [!NOTE]
+> Everything in this report is also recorded on my project blog,
+> [gsoc2026-gfpop.netlify.app](https://gsoc2026-gfpop.netlify.app/), one post
+> per piece of work, written as it happened. This page is the summary; the
+> links throughout point straight into those posts.
 
-> [Some examples](#se)
+This is the final report for my Google Summer of Code 2026 project with the
+[R Project for Statistical Computing](https://github.com/rstats-gsoc/gsoc2026/wiki/time-dependent-constraints-in-gfpop):
+teaching [gfpop](https://github.com/vrunge/gfpop), Vincent Runge's R package for
+graph-constrained changepoint detection, to let its constraint graph change
+along the signal. It is also the hub for the whole series: each section links
+to the post that covers it in detail, starting from
+[the very first one](https://gsoc2026-gfpop.netlify.app/posts/week-1-setup/).
 
-> [Graph construction](#gc)
+## About me
 
-> [Supplementary R functions](#suppl)
+Hi! I'm William. I study statistics and computing at the University of
+Waterloo, and I got to spend this summer inside a problem I really like: a
+small, sharp piece of optimization with a real package and real users on the
+other end. More about me at [williamzhang.me](https://williamzhang.me).
 
+## My mentors
 
-## Quick Start
+Three people shaped this project, and I want to thank them first:
 
-we present a basic use of the main functions of the `gfpop` package. More details about the theory of graph-cosntrained multiple change-point detection can be found [here](https://arxiv.org/abs/2002.03646)
+- [Vincent Runge](https://github.com/vrunge), the author and maintainer of
+  gfpop. The package is his, and the code from this project is in his review
+  queue on its way to merging.
+- Tung Nguyen, my mentor through the design and the mathematics. Every model
+  in this report went through his review before it went anywhere else.
+- [Toby Hocking](https://github.com/tdhock), whose work on labeled changepoint
+  detection, LOPART included, is the foundation this project builds on, and
+  who kept a helpful eye on the PRs.
 
-We install the package from Github:
+## The project
 
-```r
-#devtools::install_github("vrunge/gfpop")
-library(gfpop)
+gfpop finds optimal changepoints under a constraint graph: states and edges
+declare which segment-to-segment moves are legal, and the solver returns the
+best segmentation that obeys them. Before this project the graph was fixed for
+the whole signal. The project makes it time-dependent: each edge carries a rule
+id, a per-data-point rule vector says which rule applies where, and the solver
+only uses the edges the current rule allows. That one mechanism is what labeled
+changepoint detection needs, because a label on a region changes the rules
+inside that region. The
+[proposal](https://github.com/williamzhang7792/gsoc2026-gfpop-proposal-william-zhang)
+has the full plan; the
+[opening post](https://gsoc2026-gfpop.netlify.app/posts/week-1-setup/) is the
+longer version of this paragraph.
+
+## The goals
+
+Every must-deliver item from the proposal was done by midterm: the midterm
+deliverable was the entire core project.
+[The midterm hub post](https://gsoc2026-gfpop.netlify.app/posts/midterm-in-five-prs/)
+walks the mapping in detail; here is the list and the PR that delivers each
+item.
+
+- [x] `Edge(..., rule = ...)`, backward compatible: PR B
+- [x] `gfpop(..., rule = ...)`, backward compatible: PR D
+- [x] C++ edge filtering by rule: PR D
+- [x] Infinity handling in the constraint operators: PR D, and the story there
+  turned out [better than planned](https://gsoc2026-gfpop.netlify.app/posts/rule-activation/)
+- [x] A LOPART model, oracle-validated against `LOPART::LOPART()`: PR E
+- [x] Regression tests, gfpop with no rule identical to current behavior:
+  PRs B, C, and D each carry their own
+- [x] `R CMD check` passing with no new warnings: PR A, and held by every
+  branch since
+
+The second half of the summer went where the proposal's stretch list pointed:
+the up-down-with-labels model, and the review process itself.
+
+## What I built
+
+- `Edge(..., rule = k)`: each edge of the constraint graph carries a rule id.
+  The default is `NA`, active under every rule, so a graph written today
+  behaves exactly as it did before.
+- `gfpop(..., rule = <integer vector>)`: a per-data-point rule vector selects
+  which edges are active at each step. Calling with no `rule` argument
+  reproduces the old behavior exactly.
+- In the C++ core: `Edge` carries a `ruleID`, a `Graph::isActive()` helper
+  reads it, and the two dynamic-programming minimization loops skip inactive
+  edges.
+- Two models built on top of the feature, both validated:
+  - **LOPART** as a 4-rule, 2-state gfpop graph. The oracle test asserts that
+    `gfpop(rule = ...)` reproduces `LOPART::LOPART()` exactly on shared data:
+    the same changepoints, the same segment means, the same loss.
+  - **Up-down with labels** for peak detection: a 6-rule, 4-state graph with
+    peakStart, peakEnd, and noPeaks labels. No R package implements this
+    model, so there is no oracle to check against; it is validated
+    structurally instead. Exactly one change per positive label, zero per
+    negative label, and an all-unlabeled run reproduces
+    `graph(type = "updown")` exactly.
+
+## The five PRs
+
+The feature was handed over as five stacked pull requests, A through E, each
+small enough to review in a sitting, each backward compatible by construction,
+with the trunk green from first to last.
+[How to hand a maintainer a whole feature](https://gsoc2026-gfpop.netlify.app/posts/midterm-in-five-prs/)
+is the full story of the slicing; the short version is the diamond.
+
+```mermaid
+flowchart LR
+    A["A: CI"]
+    B["B: rule column"] --> D["D: activation"]
+    C["C: C++ plumbing"] --> D
+    D --> E["E: LOPART oracle"]
 ```
 
-We simulate some univariate gaussian data (`n = 1000` points) with relative change-point positions `0.1, 0.3, 0.5, 0.8, 1` and means `1, 2, 1, 3, 1` with a variance equal to `1`.
-
-
-```r
-n <- 1000
-myData <- dataGenerator(n, c(0.1,0.3,0.5,0.8,1), c(1,2,1,3,1), sigma = 1)
-```
-
-We define the graph of constraints to use for the dynamic programming algorithm. A simple case is the up-down constraint with a penalty here equal to a classic `2 log(n)`.
-
-
-```r
-myGraph <- graph(penalty = 2*log(n), type = "updown")
-```
-
-The gfpop function gives the result of the segmentation using `myData` and `myGraph` as parameters. We choose a gaussian cost.
-
-
-```r
-gfpop(data = myData, mygraph = myGraph, type = "mean")
-```
-
-```
-## $changepoints
-## [1]  100  298  500  800 1000
-## 
-## $states
-## [1] "Dw" "Up" "Dw" "Up" "Dw"
-## 
-## $forced
-## [1] FALSE FALSE FALSE FALSE
-## 
-## $parameters
-## [1] 1.0317856 1.9865414 0.9697470 3.0359938 0.8527903
-## 
-## $globalCost
-## [1] 1010.133
-## 
-## attr(,"class")
-## [1] "gfpop" "mean"
-```
-
-The vector `changepoints` gives the last index of each segment. It always ends with the length of the vector `vectData`.
-
-The vector `states` contains the states in which lies each mean. The length of this vector is the same as the length of `changepoint`.
-
-The vector `forced` is a boolean vector. A forced element means that two consecutive means have been forced to satisfy the constraint. For example, the "up" edge with parameter c is forced if m(i+1) - m(i) = c.
-
-The vector `parameters` contains the inferred means/parameters of the successive segments. 
- 
-The number `globalCost` is equal to the non-penalized cost, that is the value of the fit to the data ignoring the penalties for adding changes.
-
-<a id="se"></a>
-
-## Some examples
-
-### Isotonic regression
-
-The isotonic regression infers a sequence of nondecreasing means. 
-
-
-
-```r
-n <- 1000
-mydata <- dataGenerator(n, c(0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1), c(0, 0.5, 1, 1.5, 2, 2.5, 3), sigma = 1)
-myGraphIso <- graph(penalty = 2*log(n), type = "isotonic")
-gfpop(data =  mydata, mygraph = myGraphIso, type = "mean")
-```
-
-```
-## $changepoints
-## [1]  186  361  713 1000
-## 
-## $states
-## [1] "Iso" "Iso" "Iso" "Iso"
-## 
-## $forced
-## [1] FALSE FALSE FALSE
-## 
-## $parameters
-## [1] 0.1250638 1.2483475 2.1161519 2.8636266
-## 
-## $globalCost
-## [1] 992.7441
-## 
-## attr(,"class")
-## [1] "gfpop" "mean"
-```
-
-In this example, we use in `gfpop` function a robust biweight gaussian cost with `K = 1` and the `min` parameter in order to infer means greater than `0.5`.
-
-### Fixed number of change-points
-
-This algorithm is called segment neighborhood in the change-point litterature. In this example, we fixed the number of segments at 3 with an isotonic constraint. The graph contains two "up" edges with no cycling.
-
-
-
-```r
-n <- 1000
-mydata <- dataGenerator(n, c(0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1), c(0, 0.5, 1, 1.5, 2, 2.5, 3), sigma = 1)
-beta <- 0
-myGraph <- graph(
-  Edge(0, 1,"up", beta),
-  Edge(1, 2, "up", beta),
-  Edge(0, 0, "null"),
-  Edge(1, 1, "null"),
-  Edge(2, 2, "null"),
-  StartEnd(start = 0, end = 2))
-
-gfpop(data =  mydata, mygraph = myGraph, type = "mean")
-```
-
-```
-## $changepoints
-## [1]  323  705 1000
-## 
-## $states
-## [1] "0" "1" "2"
-## 
-## $forced
-## [1] FALSE FALSE
-## 
-## $parameters
-## [1] 0.5031993 2.1549691 2.9441510
-## 
-## $globalCost
-## [1] 1102.695
-## 
-## attr(,"class")
-## [1] "gfpop" "mean"
-```
-
-
-### Robust up-down with constrained starting and ending states
-
-In presence of outliers we need a robust loss (biweight). We can also force the starting and ending state and a minimal gap between the means (here equal to `1`)
-
-
-```r
-n <- 1000
-chgtpt <- c(0.1, 0.3, 0.5, 0.8, 1)
-myData <- dataGenerator(n, chgtpt, c(0, 1, 0, 1, 0), sigma = 1)
-myData <- myData + 5 * rbinom(n, 1, 0.05) - 5 * rbinom(n, 1, 0.05)
-beta <- 2 * log(n)
-myGraph <- graph(
-         Edge("Dw", "Up", type = "up", penalty = beta, gap = 1, K = 3),
-         Edge("Up", "Dw", type = "down", penalty = beta, gap = 1, K = 3),
-         Edge("Dw", "Dw", type = "null", K = 3),
-         Edge("Up", "Up", type = "null", K = 3),
-         StartEnd(start = "Dw", end = "Dw"))
-gfpop(data =  myData, mygraph = myGraph, type = "mean")
-```
-
-```
-## $changepoints
-## [1]  100  312  500  800 1000
-## 
-## $states
-## [1] "Dw" "Up" "Dw" "Up" "Dw"
-## 
-## $forced
-## [1]  TRUE FALSE FALSE FALSE
-## 
-## $parameters
-## [1]  0.0456763883  1.0456763883 -0.0603308658  1.0383495117 -0.0003792976
-## 
-## $globalCost
-## [1] 1110.176
-## 
-## attr(,"class")
-## [1] "gfpop" "mean"
-```
-
-
-
-### Robust up-down with constrained starting and ending states
-
-In presence of outliers we need a robust loss (biweight). We can also force the starting and ending state and a minimal gap between the means (here equal to `1`)
-
-
-```r
-n <- 1000
-chgtpt <- c(0.1, 0.3, 0.5, 0.8, 1)
-myData <- dataGenerator(n, chgtpt, c(0, 1, 0, 1, 0), sigma = 1)
-myData <- myData + 5 * rbinom(n, 1, 0.05) - 5 * rbinom(n, 1, 0.05)
-beta <- 2 * log(n)
-myGraph <- graph(
-         Edge("Dw", "Up", type = "up", penalty = beta, gap = 1, K = 3),
-         Edge("Up", "Dw", type = "down", penalty = beta, gap = 1, K = 3),
-         Edge("Dw", "Dw", type = "null", K = 3),
-         Edge("Up", "Up", type = "null", K = 3),
-         StartEnd(start = "Dw", end = "Dw"))
-gfpop(data =  myData, mygraph = myGraph, type = "mean")
-```
-
-```
-## $changepoints
-## [1]  113  300  500  796 1000
-## 
-## $states
-## [1] "Dw" "Up" "Dw" "Up" "Dw"
-## 
-## $forced
-## [1] FALSE FALSE  TRUE FALSE
-## 
-## $parameters
-## [1] -0.17825898  1.09464865  0.00177342  1.00177342 -0.20725183
-## 
-## $globalCost
-## [1] 1065.075
-## 
-## attr(,"class")
-## [1] "gfpop" "mean"
-```
-
-
-If we skip all these constraints and use a standard fpop algorithm, the result is the following
-
-
-
-```r
-myGraphStd <- graph(penalty = 2*log(n), type = "std")
-gfpop(data =  myData, mygraph = myGraphStd, type = "mean")
-```
-
-```
-## $changepoints
-##  [1]   29   30   51   56   58   65   66   99  101  143  144  145  197  199  207
-## [16]  208  242  245  246  282  283  306  307  350  351  356  357  378  379  392
-## [31]  393  426  427  429  430  446  447  494  496  509  510  529  530  556  557
-## [46]  570  571  575  577  605  606  616  617  620  621  676  677  718  722  723
-## [61]  746  747  769  770  780  781  821  822  829  830  892  893  898  899  908
-## [76]  909  912  913  914  921  926  930  931  975  977  998 1000
-## 
-## $states
-##  [1] "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std"
-## [14] "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std"
-## [27] "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std"
-## [40] "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std"
-## [53] "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std"
-## [66] "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std"
-## [79] "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std" "Std"
-## 
-## $forced
-##  [1] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
-## [14] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
-## [27] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
-## [40] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
-## [53] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
-## [66] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
-## [79] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
-## 
-## $parameters
-##  [1]  0.013157272  5.852235983  0.397219746 -2.487036978  4.306750060 -0.459086261
-##  [7] -6.020547264 -0.580351710  5.041691711  0.767738682  5.961869168 -4.888515188
-## [13]  1.104751718  6.573977997  0.319794566 -4.738167431  0.833793130 -2.899282191
-## [19]  6.688410838  1.228639284 -4.269924074  0.404707460 -6.793861272  0.003291056
-## [25]  6.506591287  0.629007228 -5.756058094 -0.259927168 -5.736196028  0.362430172
-## [31]  5.983851635 -0.083938587 -6.728110389 -0.201933380 -5.596212715  0.515240779
-## [37] -5.724921497 -0.233094949 -3.954707046  1.376006649  6.850232664  0.807237359
-## [43] -4.772661389  1.572871812  7.044477776  0.419697210  6.576539303  0.668004319
-## [49] -4.089779401  1.165036227  6.569345168  0.950959210  6.681891964  1.106775879
-## [55]  7.174884098  0.932498620  7.593847560  0.593401906  3.024204730 -4.575301756
-## [61]  1.347643390 -4.167946713  0.779419604  6.188344490  1.295509948  6.468646144
-## [67]  0.008155765  5.288100272 -0.317542994  5.547977558  0.073240269  5.784884068
-## [73]  0.018864107 -5.515696794  0.218333250 -6.987266782  0.513760015 -5.093780701
-## [79]  5.643352084 -0.154778961 -4.128204915 -0.544777860  5.729519458 -0.404145572
-## [85]  3.440665204  0.088765491  2.860110512
-## 
-## $globalCost
-## [1] 1467.21
-## 
-## attr(,"class")
-## [1] "gfpop" "mean"
-```
-
-
-### abs edge
-
-With a unique `"abs"` edge, we impose a difference between the means of size at least 1.  
-
-
-
-```r
-n <- 10000
-myData <- dataGenerator(n, c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1), c(0, 1, 0, 2, 1, 2, 0, 1, 0, 1), sigma = 0.5)
-beta <- 2*log(n)
-myGraph <- graph(
-  Edge(0, 0,"abs", penalty = beta, gap = 1),
-  Edge(0, 0,"null"))
-gfpop(data =  myData, mygraph = myGraph, type = "mean")
-```
-
-```
-## $changepoints
-##  [1]   999  2000  3000  4000  4999  6000  7000  8000  8999 10000
-## 
-## $states
-##  [1] "0" "0" "0" "0" "0" "0" "0" "0" "0" "0"
-## 
-## $forced
-## [1]  TRUE  TRUE FALSE FALSE  TRUE FALSE FALSE FALSE  TRUE
-## 
-## $parameters
-##  [1] -0.001621797  0.998378203 -0.001621797  2.018687659  1.000371240  2.000371240
-##  [7]  0.007557667  1.039364965 -0.007114006  0.992885994
-## 
-## $globalCost
-## [1] 2417.046
-## 
-## attr(,"class")
-## [1] "gfpop" "mean"
-```
-
-Notice that some of the edges are forced, the vector `forced` contains non-zero values.
-
-
-### Exponential decay
-
-The null edge corresponds to an exponential decay state if its parameter is not equal to 1. 
-
-
-```r
-n <- 1000
-mydata <- dataGenerator(n, c(0.2, 0.5, 0.8, 1), c(5, 10, 15, 20), sigma = 1, gamma = 0.966)
-beta <- 2*log(n)
-myGraphDecay <- graph(
-  Edge(0, 0, "up", penalty = beta),
-  Edge(0, 0, "null", 0, decay = 0.966)
-  )
-g <- gfpop(data =  mydata, mygraph = myGraphDecay, type = "mean")
-g
-```
-
-```
-## $changepoints
-## [1]  200  322  500  800 1000
-## 
-## $states
-## [1] "0" "0" "0" "0" "0"
-## 
-## $forced
-## [1] FALSE FALSE FALSE FALSE
-## 
-## $parameters
-## [1] 0.0049454559 0.1510457319 0.0028802127 0.0004721947 0.0194129929
-## 
-## $globalCost
-## [1] 976.4308
-## 
-## attr(,"class")
-## [1] "gfpop" "mean"
-```
-
-
-and we plot the result 
-
-
-```r
-gamma <- 0.966
-len <- diff(c(0, g$changepoints))
-signal <- NULL
-for(i in length(len):1)
-  {signal <- c(signal, g$parameters[i]*c(1, cumprod(rep(1/gamma,len[i]-1))))}
-signal <- rev(signal)
-
-ylimits <- c(min(mydata), max(mydata))
-plot(mydata, type ='p', pch ='+', ylim = ylimits)
-par(new = TRUE)
-plot(signal, type ='l', col = 4, ylim = ylimits, lwd = 3)
-```
-
-![plot of chunk unnamed-chunk-12](figure/unnamed-chunk-12-1.png)
-
-
-<a id="gc"></a>
-
-## Graph construction
-
-In the `gfpop` package, graphs are represented by a dataframe with 9 features and build with the R functions `Edge`, `Node`, `StartEnd` and `graph`.
-
-
-
-```r
-emptyGraph <- graph()
-emptyGraph
-```
-
-```
-## [1] state1    state2    type      parameter penalty   K         a        
-## [8] min       max      
-## <0 lignes> (ou 'row.names' de longueur nulle)
-```
-
-
-`state1` is the starting node of an edge, `state2` its ending node. `type` is one of the available edge type (`"null"`, `"std"`, `"up"`, `"down"`, `"abs"`). `penalty` is a nonnegative parameter: the additional cost $\beta_i$ to consider when we move within the graph using a edge (or stay on the same node). `parameter` is annother nonnegative parameter, a characteristics of the edge, depending of its type (it is a decay if type is "null" and a gap otherwise). `K` and `a` are robust parameters. `min` and `max` are used to constrain the rang of value for the node parameter.
-
-We add edges into a graph as follows
-
-
-```r
-myGraph <- graph(
-  Edge("E1", "E1", "null"),
-  Edge("E1", "E2", "down", 3.1415, gap = 1.5)
-)
-myGraph
-```
-
-```
-##   state1 state2 type parameter penalty   K a min max
-## 1     E1     E1 null       1.0       0 Inf 0  NA  NA
-## 2     E1     E2 down       1.5       0 Inf 0  NA  NA
-```
-
-we can only add edges to this dataframe using the object `Edge`.
-
-The graph can contain information on the starting and/or ending edge to use with the `StartEnd` function. 
-
-
-```r
-beta <- 2 * log(1000)
-myGraph <- graph(
-  Edge("Dw", "Dw", "null"),
-  Edge("Up", "Up", "null"),
-  Edge("Dw", "Up", "up", penalty = beta, gap = 1),
-  Edge("Dw", "Dw", "down", penalty = beta),
-  Edge("Up", "Dw", "down", penalty = beta),
-  StartEnd(start = "Dw", end = "Dw"))
-myGraph
-```
-
-```
-##   state1 state2  type parameter  penalty   K  a min max
-## 1     Dw     Dw  null         1  0.00000 Inf  0  NA  NA
-## 2     Up     Up  null         1  0.00000 Inf  0  NA  NA
-## 3     Dw     Up    up         1 13.81551 Inf  0  NA  NA
-## 4     Dw     Dw  down         0 13.81551 Inf  0  NA  NA
-## 5     Up     Dw  down         0 13.81551 Inf  0  NA  NA
-## 6     Dw   <NA> start        NA       NA  NA NA  NA  NA
-## 7     Dw   <NA>   end        NA       NA  NA NA  NA  NA
-```
-
-
-Some graphs are often used: they are defined by default in the `graph` function. To use these graphs, we specify a string `type` equal to `"std"`, `"isotonic"`, `"updown"` or `"relevant"`.
-For example,
-
-
-
-
-```r
-myGraphIso <- graph(penalty = 12, type = "isotonic")
-myGraphIso
-```
-
-```
-##   state1 state2 type parameter penalty   K a min max
-## 1    Iso    Iso null         1       0 Inf 0  NA  NA
-## 2    Iso    Iso   up         0      12 Inf 0  NA  NA
-```
-
-The function `Node` can be used to restrict the range of value for parameter associated to a node (called also a vertex). For example the following graph is an isotonic graph with inferred parameters between 0 et 1 only.
-
-
-
-```r
-myGraph <- graph(
-  Edge("Up", "Up", "up", penalty = 3.1415),
-  Edge("Up", "Up"),
-  Node("Up", min = 0, max = 1)
-  )
-myGraph
-```
-
-```
-##   state1 state2 type parameter penalty   K  a min max
-## 1     Up     Up   up         0  3.1415 Inf  0  NA  NA
-## 2     Up     Up null         1  0.0000 Inf  0  NA  NA
-## 3     Up     Up node        NA      NA  NA NA   0   1
-```
-
-<a id="suppl"></a>
-
-## Supplementary R functions
-
-### Data generator function
-
-the `dataGenerator` function is used to simulate `n` data-points from a distribution of `type` equal to `"mean"`, `"poisson"`, `"exp"`, `"variance"` or `"negbin"`. Standard deviation parameter `sigma` and decay `gamma` are specific to the Gaussian mean model. `size` is linked to the R `rnbinom` function from R stats package.
-
-### Standard deviation estimation
-
-We often need to estimate the standard deviation from the observed data to normalize the data or choose the edge penalties. The `sdDiff` returns such an estimation with the default HALL method [Hall et al., 1990] well suited for time series with change-points.
-
-
-[Back to Top](#top)
-
+*PR A stands alone, while PRs B and C converge on D, which leads to E.*
+
+| Piece | Write-up | Code | Status |
+|---|---|---|---|
+| A: CI, `R-CMD-check` on three platforms | [the first neutral reader](https://gsoc2026-gfpop.netlify.app/posts/adding-ci/) | [#20](https://github.com/vrunge/gfpop/pull/20) | In review upstream |
+| B: the `rule` column in the R API | [backward compatible by default](https://gsoc2026-gfpop.netlify.app/posts/rule-column/) | [#21](https://github.com/vrunge/gfpop/pull/21) | In review upstream, a draft to settle the API shape first |
+| C: inert C++ plumbing | [inert by design](https://gsoc2026-gfpop.netlify.app/posts/cpp-rule-plumbing/) | [diff](https://github.com/williamzhang7792/gfpop/compare/feat/rule-column...feat/cpp-rule-infra) | Ready, queued behind B |
+| D: activation, `gfpop(rule = ...)` | [the hard part was free](https://gsoc2026-gfpop.netlify.app/posts/rule-activation/) | [diff](https://github.com/williamzhang7792/gfpop/compare/feat/cpp-rule-infra...feat/activate-rule) | Ready, queued behind B |
+| E: the LOPART model and oracle test | [gfpop reproduces LOPART, exactly](https://gsoc2026-gfpop.netlify.app/posts/lopart-oracle/) | [diff](https://github.com/williamzhang7792/gfpop/compare/feat/activate-rule...feat/lopart) | Ready, queued behind B |
+| Beyond midterm: up-down with labels | [design note](https://github.com/williamzhang7792/gfpop/blob/design/updown-labels/design/updown-labels.md) | [diff](https://github.com/williamzhang7792/gfpop/compare/feat/lopart...feat/updown-labels) | On this fork, green |
+| The full stack assembled | | [prototype branch](https://github.com/williamzhang7792/gfpop/tree/prototype/time-dependent-constraints) | Green, LOPART oracle included |
+
+All five PRs are written, tested, and under review. Tung has reviewed the
+mathematics behind them; the code now waits on Vincent, whose package this is,
+to work through the queue. C, D, and E sit behind B on purpose: the API surface
+is the part most worth arguing about, so nothing downstream of it should ask
+for review against a moving target. Each diff link above shows exactly that
+piece's changes, because the branches stack linearly in this repository.
+
+## What was hard
+
+- **The part I worried about most was free.** The proposal flagged infinity
+  handling in the cost operators, about 200 lines each, as the main risk. They
+  needed zero changes: skipping an inactive edge leaves the destination at the
+  +Inf the solver already initializes, and gfpop's existing infinity
+  propagation does the rest.
+  [The activation post](https://gsoc2026-gfpop.netlify.app/posts/rule-activation/)
+  says it plainly, because it is worth saying plainly: I budgeted the most
+  worry for the part that cost none.
+- **The genuinely hard part was semantics, not code.** A single label-end
+  index cannot both force a change and release the lock state. The up-down
+  model resolves this with peakStart and peakEnd labels, each meaning exactly
+  one change of known direction, with the end rules routing the forced change
+  directly into the released state. It is the same trick LOPART's end rule
+  uses, rediscovered the hard way.
+- **CI earned its keep on day one.** The
+  [first neutral reader](https://gsoc2026-gfpop.netlify.app/posts/adding-ci/)
+  surfaced a network install hiding inside the test suite, and the fix
+  belonged in the package, not the YAML.
+
+## Plan changes
+
+The plan mostly held. Three changes are worth recording:
+
+- PR D was expected to be the hard one and was not, so the budget moved to the
+  up-down model, which the proposal had listed as stretch.
+- The dependency graph is a diamond, but the build order is a straight line:
+  C stacks on B because C's inert-equality test is cleaner when it can use B's
+  API. When the difference is one convenience edge, take the simpler build
+  order.
+- C, D, and E stayed staged rather than opening upstream immediately. An API
+  still under discussion should not have three PRs leaning on it.
+
+## What's next
+
+1. Get A through E merged as Vincent works through the review queue; each
+   piece is small on purpose.
+2. Promote `lopart_graph()` and `updown_labels_graph()` from test helpers to
+   exported, documented constructors.
+3. The capstone vignette, with a filmstrip of the graph changing along the
+   signal.
+4. Performance benchmarks from a thousand points to a million.
+5. The stretch goal that remains: Poisson loss with labels.
+
+And, of course, the merging itself. The stack was built so review could go one
+honest piece at a time, and over the coming months I hope to watch it go in
+the same way.
+
+## The series
+
+1. [Starting GSoC 2026: the project and how this blog works](https://gsoc2026-gfpop.netlify.app/posts/week-1-setup/)
+2. [How to hand a maintainer a whole feature: the midterm in five PRs](https://gsoc2026-gfpop.netlify.app/posts/midterm-in-five-prs/)
+3. [Adding CI to gfpop: the first neutral reader](https://gsoc2026-gfpop.netlify.app/posts/adding-ci/)
+4. [Adding a rule column to gfpop: backward compatible by default](https://gsoc2026-gfpop.netlify.app/posts/rule-column/)
+5. [Wiring the rule into gfpop's C++ core: inert by design](https://gsoc2026-gfpop.netlify.app/posts/cpp-rule-plumbing/)
+6. [Activating the rule in gfpop's solver: the hard part was free](https://gsoc2026-gfpop.netlify.app/posts/rule-activation/)
+7. [The LOPART oracle: gfpop reproduces LOPART, exactly](https://gsoc2026-gfpop.netlify.app/posts/lopart-oracle/)
+
+Thanks for reading, and thanks again to Tung, Vincent, and Toby. This was a
+good summer. If you want to say hi, I'm at
+[williamzhang.me](https://williamzhang.me).
